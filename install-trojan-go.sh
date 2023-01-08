@@ -32,10 +32,15 @@ curl -s https://api.github.com/repos/p4gefau1t/trojan-go/releases/latest \
 # wget https://github.com/p4gefau1t/trojan-go/releases/download/v0.10.6/trojan-go-linux-amd64.zip
 unzip trojan-go-linux-amd64.zip -d /etc/trojan-go/
 systemctl stop ufw && systemctl disable ufw
+systemctl stop nginx
 
 sh ~/.acme.sh/acme.sh --issue -d $domain --standalone -k ec-256
 
 sh ~/.acme.sh/acme.sh --installcert -d $domain --fullchain-file /etc/trojan-go/trojan.crt --key-file /etc/trojan-go/trojan.key --ecc
+
+croncmd="/bin/bash /root/.acme.sh/acme.sh --installcert -d $domain --fullchain-file /etc/trojan-go/trojan.crt --key-file /etc/trojan-go/trojan.key --ecc && systemctl restart trojan-go"
+cronjob="58 0 * * * $croncmd"
+( crontab -l | grep -v -F "$croncmd" ; echo "$cronjob" ) | crontab -
 
 apt install -y nginx
 cat << EOF > /etc/nginx/nginx.conf
@@ -237,6 +242,11 @@ RestartPreventExitStatus=23
 WantedBy=multi-user.target
 EOF
 
+echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
+sysctl -p
+
 systemctl enable --now trojan-go
+systemctl start trojan-go
 
 echo "Install successfully, Your password is $uuid, domain: $domain, wesocket path: /ws, login with them via trojan-go"
